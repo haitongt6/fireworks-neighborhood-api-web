@@ -20,7 +20,7 @@
 
     <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
       <div class="bg-white py-10 px-4 shadow-xl shadow-gray-200/50 sm:rounded-3xl sm:px-10 border border-gray-100">
-        <form class="space-y-6" @submit.prevent>
+        <form class="space-y-6" @submit.prevent="handleLogin">
           <div>
             <label for="phone" class="block text-sm font-bold text-gray-700 mb-2">
               手机号码
@@ -33,6 +33,7 @@
                 type="tel"
                 autocomplete="tel"
                 required
+                maxlength="11"
                 placeholder="请输入手机号码"
                 class="appearance-none block w-full px-4 py-3.5 border border-gray-200 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent sm:text-sm transition-all bg-gray-50 focus:bg-white font-medium"
               />
@@ -40,56 +41,52 @@
           </div>
 
           <div>
-            <label for="password" class="block text-sm font-bold text-gray-700 mb-2">
-              密码 / 验证码
+            <label for="verifyCode" class="block text-sm font-bold text-gray-700 mb-2">
+              验证码
             </label>
             <div class="mt-1 relative">
               <input
-                id="password"
-                v-model="password"
-                name="password"
-                type="password"
-                autocomplete="current-password"
+                id="verifyCode"
+                v-model="verifyCode"
+                name="verifyCode"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
                 required
-                placeholder="请输入密码或验证码"
-                class="appearance-none block w-full px-4 py-3.5 border border-gray-200 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent sm:text-sm transition-all bg-gray-50 focus:bg-white font-medium"
+                maxlength="6"
+                placeholder="请输入6位验证码"
+                class="appearance-none block w-full px-4 py-3.5 pr-32 border border-gray-200 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent sm:text-sm transition-all bg-gray-50 focus:bg-white font-medium tracking-widest"
               />
               <button
                 type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
+                :disabled="countdown > 0 || sendingCode"
+                @click="handleSendCode"
+                :class="[
+                  'absolute right-2 top-1/2 -translate-y-1/2 text-sm font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap',
+                  countdown > 0 || sendingCode
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-emerald-50 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 cursor-pointer'
+                ]"
               >
-                获取验证码
+                {{ sendingCode ? '发送中...' : countdown > 0 ? `重新获取(${countdown}s)` : '获取验证码' }}
               </button>
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-2">
-            <div class="flex items-center">
-              <input
-                id="remember-me"
-                v-model="rememberMe"
-                name="remember-me"
-                type="checkbox"
-                class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded cursor-pointer"
-              />
-              <label for="remember-me" class="ml-2 block text-sm text-gray-700 font-medium cursor-pointer">
-                自动登录
-              </label>
-            </div>
-
-            <div class="text-sm">
-              <a href="#" class="font-medium text-gray-500 hover:text-emerald-600 transition-colors">
-                忘记密码？
-              </a>
-            </div>
-          </div>
+          <p v-if="errorMsg" class="text-sm text-red-500 font-medium -mt-2">{{ errorMsg }}</p>
 
           <div class="pt-2">
             <button
               type="submit"
-              class="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-emerald-500/30 text-base font-bold text-white bg-emerald-500 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all"
+              :disabled="loading"
+              :class="[
+                'w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-base font-bold text-white transition-all',
+                loading
+                  ? 'bg-emerald-400 cursor-not-allowed shadow-emerald-400/30'
+                  : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500'
+              ]"
             >
-              登录 / 注册
+              {{ loading ? '登录中...' : '登录 / 注册' }}
             </button>
           </div>
         </form>
@@ -126,11 +123,78 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onBeforeUnmount } from 'vue';
+import { useRouter } from 'vue-router';
 import { RouterLink } from 'vue-router';
 import { ArrowLeft, ShieldCheck } from 'lucide-vue-next';
+import { useAuthStore } from '@/stores/auth';
+import { sendVerifyCode } from '@/lib/api';
 
 const phone = ref('');
-const password = ref('');
-const rememberMe = ref(false);
+const verifyCode = ref('');
+const loading = ref(false);
+const sendingCode = ref(false);
+const countdown = ref(0);
+const errorMsg = ref('');
+
+const router = useRouter();
+const authStore = useAuthStore();
+
+let timer: ReturnType<typeof setInterval> | null = null;
+
+function startCountdown() {
+  countdown.value = 60;
+  timer = setInterval(() => {
+    countdown.value--;
+    if (countdown.value <= 0) {
+      clearInterval(timer!);
+      timer = null;
+    }
+  }, 1000);
+}
+
+async function handleSendCode() {
+  if (countdown.value > 0 || sendingCode.value) return;
+  if (!/^1[3-9]\d{9}$/.test(phone.value)) {
+    errorMsg.value = '请输入正确的手机号';
+    return;
+  }
+  errorMsg.value = '';
+  sendingCode.value = true;
+  try {
+    await sendVerifyCode(phone.value);
+    startCountdown();
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : '验证码发送失败';
+  } finally {
+    sendingCode.value = false;
+  }
+}
+
+async function handleLogin() {
+  if (loading.value) return;
+  errorMsg.value = '';
+  if (!/^1[3-9]\d{9}$/.test(phone.value)) {
+    errorMsg.value = '请输入正确的手机号';
+    return;
+  }
+  if (!/^\d{6}$/.test(verifyCode.value)) {
+    errorMsg.value = '请输入6位数字验证码';
+    return;
+  }
+  loading.value = true;
+  try {
+    await authStore.login(phone.value, verifyCode.value);
+    const redirect = (router.currentRoute.value.query.redirect as string) || '/';
+    router.push(redirect);
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : '登录失败';
+  } finally {
+    loading.value = false;
+  }
+}
+
+onBeforeUnmount(() => {
+  if (timer) clearInterval(timer);
+});
 </script>

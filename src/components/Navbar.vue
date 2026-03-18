@@ -26,29 +26,90 @@
         </div>
 
         <div class="flex items-center gap-6">
-          <RouterLink to="/login" class="flex flex-col items-center text-gray-600 hover:text-emerald-600 transition-colors">
-            <User class="w-5 h-5 mb-0.5" />
-            <span class="text-xs font-medium">登录/注册</span>
-          </RouterLink>
-          <RouterLink to="/cart" class="flex flex-col items-center text-gray-600 hover:text-emerald-600 cursor-pointer relative transition-colors">
+          <template v-if="authStore.isLoggedIn">
+            <div class="flex flex-col items-center text-gray-600">
+              <User class="w-5 h-5 mb-0.5" />
+              <span class="text-xs font-medium max-w-[80px] truncate">{{ authStore.member?.nickname || '用户' }}</span>
+            </div>
+            <button
+              @click="handleLogout"
+              class="flex flex-col items-center text-gray-600 hover:text-red-500 transition-colors"
+            >
+              <LogOut class="w-5 h-5 mb-0.5" />
+              <span class="text-xs font-medium">退出</span>
+            </button>
+          </template>
+          <template v-else>
+            <RouterLink to="/login" class="flex flex-col items-center text-gray-600 hover:text-emerald-600 transition-colors">
+              <User class="w-5 h-5 mb-0.5" />
+              <span class="text-xs font-medium">登录/注册</span>
+            </RouterLink>
+          </template>
+
+          <!-- 购物车按钮：未登录时弹确认框 -->
+          <button
+            type="button"
+            @click="handleCartClick"
+            class="flex flex-col items-center text-gray-600 hover:text-emerald-600 cursor-pointer relative transition-colors"
+          >
             <div class="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
               {{ cartCount }}
             </div>
             <ShoppingCart class="w-5 h-5 mb-0.5" />
             <span class="text-xs font-medium">购物车</span>
-          </RouterLink>
+          </button>
         </div>
       </div>
     </div>
   </header>
+
+  <!-- 未登录确认弹框 -->
+  <LoginConfirmDialog
+    :visible="showCartLoginDialog"
+    title="请先登录"
+    message="登录后才能查看购物车"
+    hint="登录后可加入购物车、查看订单及享受专属优惠"
+    @confirm="onCartLoginConfirm"
+    @cancel="showCartLoginDialog = false"
+  />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
-import { ShoppingCart, Search, User, MapPin } from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import { RouterLink, useRouter } from 'vue-router';
+import { ShoppingCart, Search, User, MapPin, LogOut } from 'lucide-vue-next';
 import { useCartStore } from '@/stores/cart';
+import { useAuthStore } from '@/stores/auth';
+import LoginConfirmDialog from '@/components/LoginConfirmDialog.vue';
 
 const cartStore = useCartStore();
+const authStore = useAuthStore();
+const router = useRouter();
+
 const cartCount = computed(() => cartStore.totalQuantity);
+const showCartLoginDialog = ref(false);
+
+function handleCartClick() {
+  if (!authStore.isLoggedIn) {
+    showCartLoginDialog.value = true;
+    return;
+  }
+  router.push('/cart');
+}
+
+function onCartLoginConfirm() {
+  showCartLoginDialog.value = false;
+  router.push({ name: 'Login', query: { redirect: '/cart' } });
+}
+
+onMounted(async () => {
+  if (authStore.isLoggedIn && !cartStore.initialLoaded) {
+    try { await cartStore.loadCart(); } catch {}
+  }
+});
+
+async function handleLogout() {
+  await authStore.logout();
+  router.push('/');
+}
 </script>

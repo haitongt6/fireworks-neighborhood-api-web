@@ -17,11 +17,13 @@ const router = createRouter({
       path: '/cart',
       name: 'Cart',
       component: () => import('../views/Cart.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/checkout',
       name: 'Checkout',
       component: () => import('../views/Checkout.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/product/:id',
@@ -29,6 +31,17 @@ const router = createRouter({
       component: () => import('../views/ProductDetail.vue'),
     },
   ],
+});
+
+router.beforeEach((to, _from, next) => {
+  if (to.meta.requiresAuth) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      next({ name: 'Login', query: { redirect: to.fullPath } });
+      return;
+    }
+  }
+  next();
 });
 
 export default router;

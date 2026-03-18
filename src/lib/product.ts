@@ -2,11 +2,14 @@ import type { Product } from '@/lib/data';
 import type { ApiProductListItem, ApiProductDetail } from '@/lib/api';
 import { API_BASE } from '@/lib/api';
 
-/** 相对路径转为 API 绝对地址 */
+/** 相对路径转为可访问地址：将 /api/file/xxx 统一转为 /file/xxx，走 vite /file 代理 */
 function toFullUrl(url: string | undefined): string {
   if (!url || !url.trim()) return '';
   let u = url.trim();
-  if (u.startsWith('/api/file/') || u.startsWith('/file/')) {
+  if (u.startsWith('/api/file/')) {
+    u = u.replace(/^\/api\/file\//, '/file/');
+  }
+  if (u.startsWith('/file/')) {
     u = API_BASE.replace(/\/$/, '') + u;
   }
   return u;
@@ -46,6 +49,10 @@ export function apiDetailToProduct(detail: ApiProductDetail): Product {
 
 /** 商品详情页展示数据：主图视频（可选）、主图列表、详情图列表 */
 export interface ProductDetailView extends Product {
+  /** 数字类型的商品 ID，供购物车 API 使用 */
+  numericId: number;
+  /** 当前库存 */
+  stock: number;
   mainVideo: string | null;
   mainImages: string[];
   detailPics: string[];
@@ -59,6 +66,8 @@ export function apiDetailToProductDetailView(detail: ApiProductDetail): ProductD
 
   return {
     ...base,
+    numericId: detail.id,
+    stock: detail.stock ?? 0,
     mainVideo,
     mainImages,
     detailPics,
