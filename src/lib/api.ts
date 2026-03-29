@@ -10,6 +10,22 @@ export interface ApiResult<T> {
   data: T;
 }
 
+/** 接口返回 code !== 200（且非 401 已单独处理）时抛出，携带业务码供页面分支展示 */
+export class ApiError extends Error {
+  readonly code: number;
+
+  constructor(code: number, message: string) {
+    super(message);
+    this.code = code;
+    this.name = 'ApiError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+/** 与后端 {@code OrderConfirmApiCode} 一致 */
+export const ORDER_CONFIRM_CART_EMPTY = 4001;
+export const ORDER_CONFIRM_SELECTION_NOT_IN_CART = 4002;
+
 export interface ApiCategory {
   id: number;
   name: string;
@@ -87,18 +103,47 @@ export interface CartAddResultVO {
 
 // --------------- 通用请求方法 ---------------
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {
+/**
+ * 使用 XMLHttpRequest 而非 fetch，以便 Chrome DevTools → Network 中对请求使用「Replay XHR」做接口调试。
+ * （fetch 发起的请求在多数版本 Chrome 中不提供该重放入口。）
+ */
+function requestTextViaXhr(path: string, options?: RequestInit): Promise<string> {
+  const mergedHeaders: Record<string, string> = {
     ...(options?.headers as Record<string, string>),
   };
-
   const token = localStorage.getItem('token');
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    mergedHeaders['Authorization'] = `Bearer ${token}`;
   }
+  const method = (options?.method ?? 'GET').toUpperCase();
+  const body = options?.body;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const json: ApiResult<T> = await res.json();
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, `${API_BASE}${path}`, true);
+    for (const [key, value] of Object.entries(mergedHeaders)) {
+      if (value != null && value !== '') {
+        xhr.setRequestHeader(key, value);
+      }
+    }
+    xhr.onload = () => {
+      resolve(xhr.responseText);
+    };
+    xhr.onerror = () => {
+      reject(new Error('网络错误'));
+    };
+    xhr.send(body == null ? undefined : (body as XMLHttpRequestBodyInit));
+  });
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const text = await requestTextViaXhr(path, options);
+  let json: ApiResult<T>;
+  try {
+    json = JSON.parse(text) as ApiResult<T>;
+  } catch {
+    throw new Error('响应不是合法 JSON');
+  }
 
   if (json.code === 401) {
     localStorage.removeItem('token');
@@ -110,7 +155,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (json.code !== 200) {
-    throw new Error(json.message || '请求失败');
+    throw new ApiError(json.code, json.message || '请求失败');
   }
   return json.data;
 }
@@ -194,4 +239,145 @@ export function cartRemove(productId: number): Promise<void> {
 
 export function cartClear(): Promise<void> {
   return post<void>('/api/cart/clear');
+}
+
+// --------------- 订单类型 ---------------
+
+export interface OrderItemVO {
+  productId: number;
+  productTitle: string;
+  productImage: string | null;
+  productPrice: number;
+  quantity: number;
+  totalAmount: number;
+  /** 确认页：相对购物车价格快照是否有变动 */
+  priceChanged?: boolean | null;
+  /** 确认页：加入购物车时的单价 */
+  previousPrice?: number | null;
+}
+
+/** 确认页问题类型，与后端 OrderConfirmIssueVO.issueType 一致 */
+export type OrderConfirmIssueType =
+  | 'INSUFFICIENT_STOCK'
+  | 'EXCEED_LIMIT'
+  | 'PRICE_CHANGED'
+  | 'PRODUCT_OFFLINE';
+
+export interface OrderConfirmIssueVO {
+  issueType: OrderConfirmIssueType;
+  productId: number;
+  productTitle: string | null;
+  productImage: string | null;
+  message: string | null;
+  cartQuantity: number | null;
+  availableQuantity: number | null;
+  limitPerUser: number | null;
+  previousPrice: number | null;
+  currentPrice: number | null;
+}
+
+export interface OrderConfirmVO {
+  submitToken: string;
+  sourceType: number;
+  itemCount: number;
+  totalAmount: number;
+  items: OrderItemVO[];
+  /** 后端确认页异常列表；旧接口可能无此字段 */
+  issues?: OrderConfirmIssueVO[];
+}
+
+export interface OrderSubmitResult {
+  orderId: number;
+  orderNo: string;
+  payOrderNo: string;
+  orderStatus: number;
+  payStatus: number;
+  expireTime: string;
+  payAmount: number;
+}
+
+export interface OrderListItem {
+  id: number;
+  orderNo: string;
+  userId: number;
+  orderStatus: number;
+  payStatus: number;
+  sourceType: number;
+  totalAmount: number;
+  payAmount: number;
+  itemCount: number;
+  expireTime: string | null;
+  payTime: string | null;
+  createTime: string;
+}
+
+export interface OrderDetail extends OrderListItem {
+  receiverName: string;
+  receiverPhone: string;
+  receiverProvince: string;
+  receiverCity: string;
+  receiverDistrict: string;
+  receiverDetailAddress: string;
+  remark: string | null;
+  cancelTime: string | null;
+  cancelReason: string | null;
+  items: OrderItemVO[];
+}
+
+export interface OrderPageResult {
+  list: OrderListItem[];
+  total: number;
+}
+
+export interface OrderSubmitParam {
+  submitToken: string;
+  sourceType: number;
+  items: { productId: number; quantity: number }[];
+  receiverName: string;
+  receiverPhone: string;
+  receiverProvince: string;
+  receiverCity: string;
+  receiverDistrict: string;
+  receiverDetailAddress: string;
+  remark?: string;
+}
+
+// --------------- 订单 API ---------------
+
+export function fetchOrderConfirm(productIds?: number[]): Promise<OrderConfirmVO> {
+  const q = new URLSearchParams();
+  if (productIds && productIds.length > 0) {
+    q.set('productIds', productIds.join(','));
+  }
+  const qs = q.toString();
+  return request<OrderConfirmVO>(`/api/order/confirm${qs ? '?' + qs : ''}`);
+}
+
+export function submitOrder(param: OrderSubmitParam): Promise<OrderSubmitResult> {
+  return post<OrderSubmitResult>('/api/order/submit', param);
+}
+
+export function fetchOrderList(params?: {
+  orderStatus?: number;
+  pageNum?: number;
+  pageSize?: number;
+}): Promise<OrderPageResult> {
+  const q = new URLSearchParams();
+  if (params?.orderStatus !== undefined) q.set('orderStatus', String(params.orderStatus));
+  if (params?.pageNum) q.set('pageNum', String(params.pageNum));
+  if (params?.pageSize) q.set('pageSize', String(params.pageSize));
+  const qs = q.toString();
+  return request<OrderPageResult>(`/api/order/list${qs ? '?' + qs : ''}`);
+}
+
+export function fetchOrderDetail(orderNo: string): Promise<OrderDetail> {
+  return request<OrderDetail>(`/api/order/detail?orderNo=${encodeURIComponent(orderNo)}`);
+}
+
+export function cancelOrder(orderNo: string): Promise<void> {
+  return post<void>('/api/order/cancel', { orderNo });
+}
+
+export function mockPay(orderNo: string, requestNo: string): Promise<void> {
+  return post<void>('/api/pay/mock', { orderNo, requestNo });
 }

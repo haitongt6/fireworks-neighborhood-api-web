@@ -46,7 +46,7 @@
             </RouterLink>
           </template>
 
-          <!-- 购物车按钮：未登录时弹确认框 -->
+          <!-- 购物车 -->
           <button
             type="button"
             @click="handleCartClick"
@@ -58,6 +58,16 @@
             <ShoppingCart class="w-5 h-5 mb-0.5" />
             <span class="text-xs font-medium">购物车</span>
           </button>
+
+          <!-- 我的订单（仅登录后显示） -->
+          <RouterLink
+            v-if="authStore.isLoggedIn"
+            to="/orders"
+            class="flex flex-col items-center text-gray-600 hover:text-emerald-600 transition-colors"
+          >
+            <Package class="w-5 h-5 mb-0.5" />
+            <span class="text-xs font-medium">我的订单</span>
+          </RouterLink>
         </div>
       </div>
     </div>
@@ -77,7 +87,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
-import { ShoppingCart, Search, User, MapPin, LogOut } from 'lucide-vue-next';
+import { ShoppingCart, Search, User, MapPin, LogOut, Package } from 'lucide-vue-next';
 import { useCartStore } from '@/stores/cart';
 import { useAuthStore } from '@/stores/auth';
 import LoginConfirmDialog from '@/components/LoginConfirmDialog.vue';

@@ -7,8 +7,8 @@ import {
   cartRemove,
   cartClear,
 } from '@/lib/api';
-import type { CartItemVO, CartAddResultVO } from '@/lib/api';
 import type { CartItemVO } from '@/lib/api';
+
 /** 前端扩展：每条购物车项增加 selected 状态 */
 export interface CartItem extends CartItemVO {
   selected: boolean;
@@ -46,7 +46,6 @@ export const useCartStore = defineStore('cart', () => {
     }
   }
 
-  // ─── 加购（返回快照变动信息）──────────────────────────
   // ─── 加购（加购后刷新列表）──────────────────────────
 
   async function addItem(

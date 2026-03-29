@@ -176,7 +176,7 @@
             <span class="text-sm text-gray-600 font-medium">合计:</span>
             <span class="text-2xl font-bold text-red-500"><span class="text-base mr-0.5">¥</span>{{ totalPrice.toFixed(2) }}</span>
           </div>
-          <RouterLink to="/checkout" :class="['px-10 py-3 rounded-full font-bold text-white text-lg transition-all shadow-lg', cartStore.selectedItems.length > 0 ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : 'bg-gray-300 cursor-not-allowed pointer-events-none']">去结算</RouterLink>
+          <RouterLink :to="checkoutLink" :class="['px-10 py-3 rounded-full font-bold text-white text-lg transition-all shadow-lg', cartStore.selectedItems.length > 0 ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : 'bg-gray-300 cursor-not-allowed pointer-events-none']">去结算</RouterLink>
         </div>
       </div>
     </div>
@@ -233,6 +233,11 @@ const selectedQty = computed(() =>
 const totalPrice = computed(() =>
   cartStore.selectedItems.reduce((sum, item) => sum + Number(item.priceSnapshot) * item.quantity, 0),
 );
+
+const checkoutLink = computed(() => {
+  const ids = cartStore.selectedItems.map((item) => item.productId).join(',');
+  return ids ? `/checkout?productIds=${encodeURIComponent(ids)}` : '/checkout';
+});
 
 async function handleDecrement(item: CartItem) {
   if (item.quantity <= 1 || updatingIds.value.has(item.productId)) return;
