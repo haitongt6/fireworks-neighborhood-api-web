@@ -29,7 +29,8 @@ export function apiProductToProduct(item: ApiProductListItem): Product {
     name: item.title || '',
     price: Number(item.price) || 0,
     originalPrice: Number(item.price) || 0,
-    sales: item.stock ?? 0,
+    sales: item.sale ?? 0,
+    stock: item.stock ?? 0,
     image: firstImage(item.images),
     category: item.categoryName || '',
   };
@@ -41,7 +42,8 @@ export function apiDetailToProduct(detail: ApiProductDetail): Product {
     name: detail.title || '',
     price: Number(detail.price) || 0,
     originalPrice: Number(detail.price) || 0,
-    sales: detail.stock ?? 0,
+    sales: detail.sale ?? 0,
+    stock: detail.stock ?? 0,
     image: firstImage(detail.images),
     category: detail.categoryName || '',
   };

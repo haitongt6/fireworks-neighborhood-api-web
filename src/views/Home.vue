@@ -85,7 +85,7 @@
               {{ product.name }}
             </h3>
             <div class="text-xs text-gray-400 mb-3 bg-gray-50 inline-block px-2 py-0.5 rounded text-[11px]">
-              已拼 {{ product.sales > 10000 ? (product.sales / 10000).toFixed(1) + '万' : product.sales }}件
+              已售 {{ formatCount(product.sales) }} 件 · 库存 {{ product.stock }} 件
             </div>
             <div class="flex items-center justify-between mt-auto">
               <div class="flex items-baseline gap-1">
@@ -161,6 +161,13 @@ onMounted(async () => {
 });
 
 watch(selectedCatIdx, () => { if (categories.value.length > 0) { loadProducts(); } });
+
+function formatCount(n: number): string {
+  if (n > 10000) {
+    return `${(n / 10000).toFixed(1)}万`;
+  }
+  return String(n);
+}
 
 async function addToCart(product: Product) {
   if (!authStore.isLoggedIn) {

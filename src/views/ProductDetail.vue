@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div v-if="loading" class="min-h-screen bg-gray-50 flex items-center justify-center">
     <p class="text-gray-500">加载中...</p>
   </div>
@@ -49,7 +49,7 @@
               <div class="flex items-center"><Truck class="w-4 h-4 text-emerald-500 mr-1.5" /> 48小时发货</div>
               <div class="flex items-center"><ShieldCheck class="w-4 h-4 text-emerald-500 mr-1.5" /> 假一赔十</div>
               <div class="flex items-center"><CheckCircle2 class="w-4 h-4 text-emerald-500 mr-1.5" /> 极速退款</div>
-              <div class="text-gray-400 ml-auto">已拼 {{ product.sales > 10000 ? (product.sales / 10000).toFixed(1) + '万' : product.sales }} 件</div>
+              <div class="text-gray-400 ml-auto">已售 {{ product.sales > 10000 ? (product.sales / 10000).toFixed(1) + '万' : product.sales }} 件</div>
             </div>
           </div>
           <div class="flex items-center gap-6 mb-10">

@@ -42,6 +42,8 @@ export interface ApiProductListItem {
   images: string;
   price: number;
   stock: number;
+  /** 销量（已售件数），对应后端 pms_product.sale */
+  sale: number;
   status: number;
 }
 
@@ -56,6 +58,8 @@ export interface ApiProductDetail {
   detailPics?: string;
   price: number;
   stock: number;
+  /** 销量（已售件数） */
+  sale: number;
   status: number;
 }
 
